@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal Wayback Machine Downloader</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #f4f6f9;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background: #ffffff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 500px;
+        }
+        h2 {
+            margin-top: 0;
+            color: #2c3e50;
+        }
+        p {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            font-size: 0.85rem;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 1rem;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #2980b9;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 1rem;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background-color: #2471a3;
+        }
+        #status {
+            margin-top: 15px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            color: #7f8c8d;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Universal Wayback Downloader</h2>
+    <p>Paste a normal URL <strong>OR</strong> a regular Wayback Machine link below to fetch and download the raw source file.</p>
+    
+    <div class="form-group">
+        <label for="targetUrl">Input URL (Normal or Wayback Link)</label>
+        <input type="text" id="targetUrl" placeholder="example.com OR web.archive.org/web/..." required>
+    </div>
+
+    <div class="form-group" id="yearGroup">
+        <label for="year">Target Year (Only used if entering a normal website URL)</label>
+        <input type="text" id="year" value="2015" placeholder="e.g., 2012, 2018, 2023">
+    </div>
+
+    <button onclick="processDownload()">Download Clean File</button>
+
+    <div id="status"></div>
+</div>
+
+<script>
+async function processDownload() {
+    let inputUrl = document.getElementById('targetUrl').value.trim();
+    let yearInput = document.getElementById('year').value.trim() || "2015";
+    let statusDiv = document.getElementById('status');
+
+    if (!inputUrl) {
+        alert('Please enter a valid URL.');
+        return;
+    }
+
+    statusDiv.style.color = "#3498db";
+    statusDiv.innerText = "Analyzing link style...";
+
+    // 1. CHECK IF USER PASSED A REGULAR WAYBACK LINK
+    if (inputUrl.includes('web.archive.org/web/')) {
+        statusDiv.innerText = "Regular Wayback link detected! Stripping banner code...";
+        
+        // Regex extracts the timestamp and the original destination site URL
+        let waybackRegex = /web\.archive\.org\/web\/(\d{14}|\d{0,13}\*?)([a-z]{2}_)?\/(.+)/i;
+        let match = inputUrl.match(waybackRegex);
+        
+        if (match) {
+            let timestamp = match[1];
+            let originalSiteUrl = match[3];
+            
+            // Rebuild using the mandatory 'id_' flag to force clean download
+            let cleanDownloadUrl = `https://archive.org{timestamp}id_/${originalSiteUrl}`;
+            statusDiv.style.color = "#27ae60";
+            statusDiv.innerText = "Redirecting to clean download file!";
+            window.location.href = cleanDownloadUrl;
+            return;
+        } else {
+            statusDiv.style.color = "#c0392b";
+            statusDiv.innerText = "Error: Invalid Wayback link format.";
+            return;
+        }
+    }
+
+    // 2. FALLBACK FOR NORMAL LIVE WEBSITE URL (Uses Availability API lookup)
+    let cleanUrl = inputUrl.replace(/^https?:\/\//i, '');
+    statusDiv.innerText = "Normal URL detected. Querying archive registry...";
+    let searchTimestamp = `${yearInput}0101000000`;
+    let apiEndpoint = `https://archive.org{encodeURIComponent(cleanUrl)}&timestamp=${searchTimestamp}`;
+
+    try {
+        let response = await fetch(apiEndpoint);
+        let data = await response.json();
+
+        if (data.archived_snapshots && data.archived_snapshots.closest) {
+            let exactTimestamp = data.archived_snapshots.closest.timestamp;
+            statusDiv.style.color = "#27ae60";
+            statusDiv.innerText = "Snapshot located! Injecting download flags...";
+            
+            let rawDownloadUrl = `https://archive.org{exactTimestamp}id_/http://${cleanUrl}`;
+            window.location.href = rawDownloadUrl;
+        } else {
+            statusDiv.style.color = "#c0392b";
+            statusDiv.innerText = "Error: No archive history found for this URL.";
+        }
+    } catch (error) {
+        statusDiv.style.color = "#c0392b";
+        statusDiv.innerText = "Network failure. Please verify the URL target.";
+        console.error(error);
+    }
+}
+</script>
+
+</body>
+</html>
