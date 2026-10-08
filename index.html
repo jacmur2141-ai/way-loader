@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Universal Wayback Machine Downloader</title>
+    <title>Wayback Site & Asset Bundler</title>
+    <!-- Include JSZip and FileSaver via CDN for browser-side zipping -->
+    <script src="https://cloudflare.com"></script>
+    <script src="https://cloudflare.com"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -21,143 +24,146 @@
             border-radius: 8px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
             width: 100%;
-            max-width: 500px;
+            max-width: 550px;
         }
-        h2 {
-            margin-top: 0;
-            color: #2c3e50;
-        }
-        p {
-            font-size: 0.9rem;
-            color: #666;
-            margin-bottom: 20px;
-        }
-        .form-group {
-            margin-bottom: 15px;
-        }
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-            font-size: 0.85rem;
-        }
+        h2 { margin-top: 0; color: #2c3e50; }
+        p { font-size: 0.9rem; color: #666; margin-bottom: 20px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 0.85rem; }
         input[type="text"] {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            box-sizing: border-box;
-            font-size: 1rem;
+            width: 100%; padding: 12px; border: 1px solid #ccc;
+            border-radius: 4px; box-sizing: border-box; font-size: 1rem;
         }
         button {
-            width: 100%;
-            padding: 12px;
-            background-color: #2980b9;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            font-size: 1rem;
-            cursor: pointer;
-            font-weight: bold;
-            transition: background 0.2s;
+            width: 100%; padding: 12px; background-color: #2ecc71;
+            color: white; border: none; border-radius: 4px;
+            font-size: 1rem; cursor: pointer; font-weight: bold; transition: background 0.2s;
         }
-        button:hover {
-            background-color: #2471a3;
-        }
+        button:hover { background-color: #27ae60; }
         #status {
-            margin-top: 15px;
-            font-size: 0.9rem;
-            font-weight: bold;
-            color: #7f8c8d;
-            text-align: center;
+            margin-top: 15px; font-size: 0.9rem; font-weight: bold;
+            color: #7f8c8d; text-align: center; white-space: pre-line;
         }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>Universal Wayback Downloader</h2>
-    <p>Paste a normal URL <strong>OR</strong> a regular Wayback Machine link below to fetch and download the raw source file.</p>
+    <h2>Wayback Asset Bundler</h2>
+    <p>Paste a Wayback link. The website will gather the page, find its attached styles/images, and bundle them into a ZIP download.</p>
     
     <div class="form-group">
-        <label for="targetUrl">Input URL (Normal or Wayback Link)</label>
-        <input type="text" id="targetUrl" placeholder="example.com OR web.archive.org/web/..." required>
+        <label for="targetUrl">Wayback Machine Link</label>
+        <input type="text" id="targetUrl" placeholder="https://archive.org..." required>
     </div>
 
-    <div class="form-group" id="yearGroup">
-        <label for="year">Target Year (Only used if entering a normal website URL)</label>
-        <input type="text" id="year" value="2015" placeholder="e.g., 2012, 2018, 2023">
-    </div>
-
-    <button onclick="processDownload()">Download Clean File</button>
+    <button onclick="downloadWithAssets()">Bundle & Download ZIP</button>
 
     <div id="status"></div>
 </div>
 
 <script>
-async function processDownload() {
-    let inputUrl = document.getElementById('targetUrl').value.trim();
-    let yearInput = document.getElementById('year').value.trim() || "2015";
-    let statusDiv = document.getElementById('status');
+async function downloadWithAssets() {
+    const inputUrl = document.getElementById('targetUrl').value.trim();
+    const statusDiv = document.getElementById('status');
 
-    if (!inputUrl) {
-        alert('Please enter a valid URL.');
+    if (!inputUrl || !inputUrl.includes('web.archive.org/web/')) {
+        statusDiv.style.color = "#c0392b";
+        statusDiv.innerText = "Error: Please paste a valid web.archive.org link.";
         return;
     }
 
     statusDiv.style.color = "#3498db";
-    statusDiv.innerText = "Analyzing link style...";
+    statusDiv.innerText = "Parsing URL structure...";
 
-    // 1. CHECK IF USER PASSED A REGULAR WAYBACK LINK
-    if (inputUrl.includes('web.archive.org/web/')) {
-        statusDiv.innerText = "Regular Wayback link detected! Stripping banner code...";
-        
-        // Regex extracts the timestamp and the original destination site URL
-        let waybackRegex = /web\.archive\.org\/web\/(\d{14}|\d{0,13}\*?)([a-z]{2}_)?\/(.+)/i;
-        let match = inputUrl.match(waybackRegex);
-        
-        if (match) {
-            let timestamp = match[1];
-            let originalSiteUrl = match[3];
-            
-            // Rebuild using the mandatory 'id_' flag to force clean download
-            let cleanDownloadUrl = `https://archive.org{timestamp}id_/${originalSiteUrl}`;
-            statusDiv.style.color = "#27ae60";
-            statusDiv.innerText = "Redirecting to clean download file!";
-            window.location.href = cleanDownloadUrl;
-            return;
-        } else {
-            statusDiv.style.color = "#c0392b";
-            statusDiv.innerText = "Error: Invalid Wayback link format.";
-            return;
-        }
+    const waybackRegex = /web\.archive\.org\/web\/(\d{14}|\d{0,13}\*?)([a-z]{2}_)?\/(.+)/i;
+    const match = inputUrl.match(waybackRegex);
+    
+    if (!match) {
+        statusDiv.style.color = "#c0392b";
+        statusDiv.innerText = "Error: Invalid link construction layout.";
+        return;
     }
 
-    // 2. FALLBACK FOR NORMAL LIVE WEBSITE URL (Uses Availability API lookup)
-    let cleanUrl = inputUrl.replace(/^https?:\/\//i, '');
-    statusDiv.innerText = "Normal URL detected. Querying archive registry...";
-    let searchTimestamp = `${yearInput}0101000000`;
-    let apiEndpoint = `https://archive.org{encodeURIComponent(cleanUrl)}&timestamp=${searchTimestamp}`;
+    const timestamp = match[1];
+    const originalSiteUrl = match[3];
+    
+    // Force 'id_' modifier to strip the archive shell framing
+    const cleanSourceUrl = `https://archive.org${timestamp}id_/${originalSiteUrl}`;
+    
+    // Public CORS proxy to allow browser-side web scraping
+    const proxyUrl = "https://corsproxy.io";
 
     try {
-        let response = await fetch(apiEndpoint);
-        let data = await response.json();
+        statusDiv.innerText = "Fetching core index file through secure proxy...";
+        const response = await fetch(proxyUrl + encodeURIComponent(cleanSourceUrl));
+        if (!response.ok) throw new Error("Could not fetch the archive page.");
+        let htmlContent = await response.text();
 
-        if (data.archived_snapshots && data.archived_snapshots.closest) {
-            let exactTimestamp = data.archived_snapshots.closest.timestamp;
-            statusDiv.style.color = "#27ae60";
-            statusDiv.innerText = "Snapshot located! Injecting download flags...";
-            
-            let rawDownloadUrl = `https://archive.org{exactTimestamp}id_/http://${cleanUrl}`;
-            window.location.href = rawDownloadUrl;
-        } else {
-            statusDiv.style.color = "#c0392b";
-            statusDiv.innerText = "Error: No archive history found for this URL.";
+        statusDiv.innerText = "Scanning for styles, scripts, and images...";
+        
+        // Initialize an in-memory browser parser to read the HTML structure
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(htmlContent, 'text/html');
+        const zip = new JSZip();
+
+        // Extract assets from common tags
+        const assetUrls = [];
+        
+        // Gather styles (<link rel="stylesheet">)
+        doc.querySelectorAll('link[rel="stylesheet"]').forEach(el => { if(el.href) assetUrls.push({el: el, attr: 'href', type: 'css'}); });
+        // Gather scripts (<script src="...">)
+        doc.querySelectorAll('script[src]').forEach(el => { if(el.src) assetUrls.push({el: el, attr: 'src', type: 'js'}); });
+        // Gather images (<img src="...">)
+        doc.querySelectorAll('img[src]').forEach(el => { if(el.src) assetUrls.push({el: el, attr: 'src', type: 'img'}); });
+
+        statusDiv.innerText = `Found ${assetUrls.length} attached asset paths.\nDownloading assets into ZIP package...`;
+
+        // Process assets, download them, and swap their paths to point locally inside the ZIP
+        for (let i = 0; i < assetUrls.length; i++) {
+            const asset = assetUrls[i];
+            let rawUrl = asset.el.getAttribute(asset.attr);
+
+            // Normalize asset links to point back to the raw archive asset
+            if (!rawUrl.startsWith('http') && !rawUrl.startsWith('//')) {
+                // If it's a relative path, map it back to the original archived domain
+                const baseDomain = originalSiteUrl.split('/')[0];
+                rawUrl = `https://archive.org${timestamp}id_/http://${baseDomain}/${rawUrl.replace(/^\//,'')}`;
+            } else if (!rawUrl.includes('web.archive.org')) {
+                rawUrl = `https://archive.org${timestamp}id_/${rawUrl}`;
+            }
+
+            try {
+                const assetFilename = `assets/file_${i}.${asset.type}`;
+                const assetRes = await fetch(proxyUrl + encodeURIComponent(rawUrl));
+                
+                if (assetRes.ok) {
+                    const blob = await assetRes.blob();
+                    // Save to folder inside the ZIP file structure
+                    zip.file(assetFilename, blob);
+                    // Rewrite HTML reference link to read locally from its new folder
+                    asset.el.setAttribute(asset.attr, assetFilename);
+                }
+            } catch (e) {
+                console.warn(`Skipped unreachable asset asset: ${rawUrl}`);
+            }
         }
-    } catch (error) {
+
+        // Add the updated, locally linked HTML file to the root of the ZIP
+        zip.file("index.html", doc.documentElement.outerHTML);
+
+        statusDiv.style.color = "#27ae60";
+        statusDiv.innerText = "Compiling ZIP payload structure...";
+        
+        // Generate the zip folder bundle and hand it directly to the browser download prompt
+        const content = await zip.generateAsync({type: "blob"});
+        saveAs(content, "wayback_page_bundle.zip");
+
+        statusDiv.innerText = "ZIP package downloaded successfully!";
+    } catch (err) {
         statusDiv.style.color = "#c0392b";
-        statusDiv.innerText = "Network failure. Please verify the URL target.";
-        console.error(error);
+        statusDiv.innerText = `Error: Asset fetch failure.\n${err.message}`;
+        console.error(err);
     }
 }
 </script>
